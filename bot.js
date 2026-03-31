@@ -1,4 +1,3 @@
-import { Client, GatewayIntentBits } from "discord.js";
 import http from "http";
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -20,32 +19,49 @@ const COLORS = [
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const API = "https://discord.com/api/v10";
+const HEADERS = { Authorization: `Bot ${TOKEN}`, "Content-Type": "application/json" };
 
-client.once("clientReady", async () => {
-  console.log(`Logged in as ${client.user?.tag}`);
-  const guild = await client.guilds.fetch(GUILD_ID);
-  const role = await guild.roles.fetch(ROLE_ID);
-  if (!role) { console.error("Role not found!"); process.exit(1); }
+async function setRoleColor(color) {
+  const res = await fetch(`${API}/guilds/${GUILD_ID}/roles/${ROLE_ID}`, {
+    method: "PATCH", headers: HEADERS, body: JSON.stringify({ color }),
+  });
+  if (res.status === 429) {
+    const data = await res.json();
+    const wait = Math.ceil((data.retry_after ?? 1) * 1000);
+    console.log(`Rate limited — waiting ${wait}ms`);
+    await sleep(wait);
+    return setRoleColor(color);
+  }
+  if (!res.ok) throw new Error(`Discord error ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function main() {
+  const meRes = await fetch(`${API}/users/@me`, { headers: HEADERS });
+  if (!meRes.ok) throw new Error("Invalid bot token!");
+  const me = await meRes.json();
+  console.log(`Logged in as ${me.username}`);
+
+  const roleRes = await fetch(`${API}/guilds/${GUILD_ID}/roles`, { headers: HEADERS });
+  const roles = await roleRes.json();
+  const role = roles.find((r) => r.id === ROLE_ID);
+  if (!role) throw new Error(`Role ${ROLE_ID} not found!`);
   console.log(`Cycling colors on: "${role.name}"`);
 
   let colorIndex = 0;
-
   while (true) {
     const color = COLORS[colorIndex % COLORS.length];
     colorIndex++;
-
     try {
-      await role.edit({ color });
+      await setRoleColor(color);
       console.log(`Color: #${color.toString(16).padStart(6, "0")}`);
     } catch (err) {
-      console.error("Error:", err?.message ?? err);
-      await sleep(3000);
+      console.error("Error:", err.message);
+      await sleep(5000);
     }
-
-    await sleep(2000);
+    await sleep(3000);
   }
-});
+}
 
-client.on("error", (err) => console.error("Client error:", err));
-client.login(TOKEN);
+main().catch((err) => { console.error("Fatal:", err.message); process.exit(1); });
