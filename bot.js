@@ -19,9 +19,7 @@ const COLORS = [
   0x0000ff, 0x8800ff, 0xff00ff, 0xff0088, 0x00ff88,
 ];
 
-let colorIndex = 0;
-let busy = false;
-
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once("clientReady", async () => {
@@ -31,10 +29,9 @@ client.once("clientReady", async () => {
   if (!role) { console.error("Role not found!"); process.exit(1); }
   console.log(`Cycling colors on: "${role.name}"`);
 
-  setInterval(async () => {
-    if (busy) return;
-    busy = true;
+  let colorIndex = 0;
 
+  while (true) {
     const color = COLORS[colorIndex % COLORS.length];
     colorIndex++;
 
@@ -42,17 +39,12 @@ client.once("clientReady", async () => {
       await role.edit({ color });
       console.log(`Color: #${color.toString(16).padStart(6, "0")}`);
     } catch (err) {
-      if (err?.status === 429) {
-        const retryAfter = err?.retryAfter ?? 2000;
-        console.log(`Rate limited — waiting ${retryAfter}ms`);
-        await new Promise(r => setTimeout(r, retryAfter));
-      } else {
-        console.error("Error:", err?.message ?? err);
-      }
-    } finally {
-      busy = false;
+      console.error("Error:", err?.message ?? err);
+      await sleep(3000);
     }
-  }, 1500);
+
+    await sleep(2000);
+  }
 });
 
 client.on("error", (err) => console.error("Client error:", err));
