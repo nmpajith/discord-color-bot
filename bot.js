@@ -60,7 +60,7 @@ async function main() {
       console.error("Error:", err.message);
       await sleep(5000);
     }
-    await sleep(3000);
+    await sleep(5000);
   }
 }
 
